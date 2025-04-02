@@ -1,7 +1,6 @@
-﻿using System;
-using System.Reflection;
+﻿using System.Reflection;
 
-namespace MinimalApiMapper.SourceGenerator;
+namespace MinimalApiMapper.SourceGenerator.Helpers;
 
 internal class CodeBuilder
 {

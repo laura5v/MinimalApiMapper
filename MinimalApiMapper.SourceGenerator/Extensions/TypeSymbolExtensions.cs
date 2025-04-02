@@ -1,6 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 
-namespace MinimalApiMapper.SourceGenerator;
+namespace MinimalApiMapper.SourceGenerator.Extensions;
 
 internal static class TypeSymbolExtensions
 {
