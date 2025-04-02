@@ -1,10 +1,9 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using MinimalApiMapper.Abstractions;
 
-namespace MinimalApiMapper.SourceGenerator.Sample;
+namespace MinimalApiMapper.SourceGenerator.Sample.Groups;
 
 [MapGroup("api")]
 public class ApiGroup(ILogger<ApiGroup> logger)
@@ -18,11 +17,14 @@ public class ApiGroup(ILogger<ApiGroup> logger)
     }
     
     [Authorize]
-    [MapGet("auth/{id}")]
-    public Ok<string> GetAuth(ClaimsPrincipal user, string id)
+    [MapGet("auth")]
+    public Ok<ModelResponse> GetAuth(ClaimsPrincipal user, string? data = null)
     {
-        logger.LogInformation("User: {Name}", user.Identity?.Name);
-        
-        return TypedResults.Ok($"Auth {id}!");
+        return TypedResults.Ok(new ModelResponse
+        {
+            User = user.Claims.FirstOrDefault(c => c.Type == "sub")?.Value,
+            Message = $"Authenticated as: {user.Identity?.Name}",
+            Data = data,
+        });
     }
 }

@@ -1,13 +1,12 @@
-﻿// MinimalApiMapper.Abstractions/Attributes.cs
-
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
+using JetBrains.Annotations;
 
 namespace MinimalApiMapper.Abstractions;
 
 /// <summary>
 /// Specifies that a class represents a group of API endpoints with a common route prefix.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class MapGroupAttribute : Attribute
 {
     /// <summary>
@@ -19,7 +18,7 @@ public sealed class MapGroupAttribute : Attribute
     /// Initializes a new instance of the <see cref="MapGroupAttribute"/> class.
     /// </summary>
     /// <param name="prefix">The route prefix for the group.</param>
-    public MapGroupAttribute([StringSyntax("Route")] string prefix)
+    public MapGroupAttribute([StringSyntax("Route"), RouteTemplate] string prefix)
     {
         // Ensure prefix doesn't start or end with '/' to avoid double slashes when combining
         Prefix = prefix?.Trim('/') ?? string.Empty;
@@ -41,7 +40,7 @@ public abstract class MapMethodAttribute : Attribute
     /// Initializes a new instance of the <see cref="MapMethodAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    protected MapMethodAttribute([StringSyntax("Route")] string? template)
+    protected MapMethodAttribute([StringSyntax("Route"), RouteTemplate] string? template)
     {
         // Allow empty template for root of the group
         Template = template ?? string.Empty;
@@ -57,7 +56,8 @@ public sealed class MapGetAttribute : MapMethodAttribute
     /// Initializes a new instance of the <see cref="MapGetAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    public MapGetAttribute([StringSyntax("Route")] string? template = null) : base(template) { }
+    public MapGetAttribute([StringSyntax("Route"), RouteTemplate] string? template = null)
+        : base(template) { }
 }
 
 /// <summary>
@@ -69,7 +69,8 @@ public sealed class MapPostAttribute : MapMethodAttribute
     /// Initializes a new instance of the <see cref="MapPostAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    public MapPostAttribute([StringSyntax("Route")] string? template = null) : base(template) { }
+    public MapPostAttribute([StringSyntax("Route"), RouteTemplate] string? template = null)
+        : base(template) { }
 }
 
 /// <summary>
@@ -81,7 +82,8 @@ public sealed class MapPutAttribute : MapMethodAttribute
     /// Initializes a new instance of the <see cref="MapPutAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    public MapPutAttribute([StringSyntax("Route")] string? template = null) : base(template) { }
+    public MapPutAttribute([StringSyntax("Route"), RouteTemplate] string? template = null)
+        : base(template) { }
 }
 
 /// <summary>
@@ -93,7 +95,8 @@ public sealed class MapDeleteAttribute : MapMethodAttribute
     /// Initializes a new instance of the <see cref="MapDeleteAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    public MapDeleteAttribute([StringSyntax("Route")] string? template = null) : base(template) { }
+    public MapDeleteAttribute([StringSyntax("Route"), RouteTemplate] string? template = null)
+        : base(template) { }
 }
 
 /// <summary>
@@ -105,7 +108,8 @@ public sealed class MapPatchAttribute : MapMethodAttribute
     /// Initializes a new instance of the <see cref="MapPatchAttribute"/> class.
     /// </summary>
     /// <param name="template">The route template for the endpoint.</param>
-    public MapPatchAttribute([StringSyntax("Route")] string? template = null) : base(template) { }
+    public MapPatchAttribute([StringSyntax("Route"), RouteTemplate] string? template = null)
+        : base(template) { }
 }
 
 /// <summary>
@@ -131,12 +135,18 @@ public sealed class MapMethodsAttribute : Attribute // Does not inherit MapMetho
     /// <param name="httpMethods">A collection of HTTP methods (e.g., "GET", "POST").</param>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="httpMethods"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown if <paramref name="httpMethods"/> is empty or contains null/empty strings.</exception>
-    public MapMethodsAttribute([StringSyntax("Route")] string? template, params string[] httpMethods)
+    public MapMethodsAttribute(
+        [StringSyntax("Route"), RouteTemplate] string? template,
+        params string[] httpMethods
+    )
     {
         if (httpMethods == null)
             throw new ArgumentNullException(nameof(httpMethods));
         if (!httpMethods.Any() || httpMethods.Any(string.IsNullOrWhiteSpace))
-            throw new ArgumentException("HTTP methods collection cannot be empty or contain null/whitespace methods.", nameof(httpMethods));
+            throw new ArgumentException(
+                "HTTP methods collection cannot be empty or contain null/whitespace methods.",
+                nameof(httpMethods)
+            );
 
         Template = template ?? string.Empty;
         HttpMethods = httpMethods.Select(m => m.ToUpperInvariant()).ToList(); // Store uppercase for consistency

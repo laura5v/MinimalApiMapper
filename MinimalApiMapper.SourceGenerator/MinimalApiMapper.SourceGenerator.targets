@@ -1,0 +1,39 @@
+﻿<Project>
+
+    <!-- Define the user-configurable property with a default value -->
+    <PropertyGroup>
+        <MinimalApiMapper_GeneratedOutput Condition="'$(MinimalApiMapper_GeneratedOutput)' == ''">Generated/MinimalApiMapper</MinimalApiMapper_GeneratedOutput>
+    </PropertyGroup>
+
+    <!-- Calculate the full absolute path -->
+    <PropertyGroup>
+        <MinimalApiMapper_GeneratedOutputFullPath Condition="!$([System.IO.Path]::IsPathRooted('$(MinimalApiMapper_GeneratedOutput)'))">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(MinimalApiMapper_GeneratedOutput)'))</MinimalApiMapper_GeneratedOutputFullPath>
+        <MinimalApiMapper_GeneratedOutputFullPath Condition="$([System.IO.Path]::IsPathRooted('$(MinimalApiMapper_GeneratedOutput)'))">$(MinimalApiMapper_GeneratedOutput)</MinimalApiMapper_GeneratedOutputFullPath>
+        <MinimalApiMapper_GeneratedOutputFullPath>$([System.IO.Path]::GetFullPath($(MinimalApiMapper_GeneratedOutputFullPath)))</MinimalApiMapper_GeneratedOutputFullPath>
+    </PropertyGroup>
+
+    <!-- Make the full path available to the source generator -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="MinimalApiMapper_GeneratedOutput" />
+        <CompilerVisibleProperty Include="MinimalApiMapper_GeneratedOutputFullPath" />
+    </ItemGroup>
+
+    <!--
+      Ensure the generated files (if written to disk) are included in the compilation
+      before the compiler runs. This allows other generators/tools to see them.
+    -->
+    <Target Name="_IncludeMinimalApiMapperGeneratedFiles" BeforeTargets="CoreCompile;RoslynCodeTaskFactory">
+        <ItemGroup>
+            <!-- Include the C# files from the output directory if it exists -->
+            <Compile Include="$(MinimalApiMapper_GeneratedOutputFullPath)\**\*.g.cs" Condition="Exists('$(MinimalApiMapper_GeneratedOutputFullPath)')" />
+        </ItemGroup>
+    </Target>
+
+    <!-- Clean up the generated directory during a Clean operation -->
+    <Target Name="_CleanMinimalApiMapperGeneratedFiles" BeforeTargets="CoreClean">
+        <RemoveDir Directories="$(MinimalApiMapper_GeneratedOutputFullPath)" Condition="Exists('$(MinimalApiMapper_GeneratedOutputFullPath)')" />
+        <!-- Optional: Log message -->
+        <Message Text="Cleaning MinimalApiMapper generated files from $(MinimalApiMapper_GeneratedOutputFullPath)" Importance="normal" Condition="Exists('$(MinimalApiMapper_GeneratedOutputFullPath)')" />
+    </Target>
+
+</Project>

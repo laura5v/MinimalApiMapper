@@ -2,38 +2,79 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>13.0</LangVersion>
-        <IsPackable>false</IsPackable>
-        <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
-
+        <IsPackable>true</IsPackable>
+        <Nullable>enable</Nullable>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsRoslynComponent>true</IsRoslynComponent>
+        <InformationalVersion>1.0.0-dev.6</InformationalVersion>
+        <PackageVersion>$(InformationalVersion)</PackageVersion>
+        <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">true</IsAotCompatible>
 
-        <RootNamespace>MinimalApiMapper.SourceGenerator</RootNamespace>
-        <PackageId>MinimalApiMapper.SourceGenerator</PackageId>
+        <!-- Include the .targets file in the build folder -->
+        <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);CustomPackageTarget</TargetsForTfmSpecificContentInPackage>
     </PropertyGroup>
 
+    <!-- NuGet Package -->
+    <PropertyGroup>
+        <PackageId>MinimalApiMapper.SourceGenerator</PackageId>
+        <Description>MinimalApiMapper.SourceGenerator</Description>
+        <PackageTags>Minimal Api AOT SourceGenerator ASP.NET</PackageTags>
+    </PropertyGroup>
+
+<!--    <PropertyGroup>
+        &lt;!&ndash; Persist the source generator (and other) files to disk &ndash;&gt;
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        &lt;!&ndash; The "base" path for the source generators &ndash;&gt;
+        <GeneratedFolder>Generated</GeneratedFolder>
+        &lt;!&ndash; Write the output for each target framework to a different sub-folder &ndash;&gt;
+        <CompilerGeneratedFilesOutputPath>$(GeneratedFolder)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
+    </PropertyGroup>-->
+    
+    <ItemGroup>
+        <!-- Reference the Abstractions project -->
+        <ProjectReference Include="..\MinimalApiMapper.Abstractions\MinimalApiMapper.Abstractions.csproj" />
+    </ItemGroup>
+    
     <ItemGroup>
         <!-- Roslyn APIs -->
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0"/>
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.3.0"/>
-
-        <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.3.0" PrivateAssets="all"/>
+        
         <PackageReference Include="PolySharp" Version="1.15.0">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
+    
+    <!-- Define the custom target to include the .targets file -->
+    <Target Name="CustomPackageTarget" BeforeTargets="GenerateNuspec">
+        <ItemGroup>
+            <!-- Place the .targets file in the 'build' folder of the package -->
+            <TfmSpecificContentInPackage Include="$(MSBuildThisFileDirectory)MinimalApiMapper.SourceGenerator.targets" PackagePath="build/$(TargetFramework)" />
+            <!-- If targeting multiple frameworks, adjust PackagePath accordingly, e.g., build/net6.0, build/net8.0 -->
+            <!-- For a netstandard2.0 generator, 'build/netstandard2.0' or just 'build/' might be sufficient -->
+            <!-- Using 'build/' makes it apply regardless of the consuming project's TFM -->
+            <TfmSpecificContentInPackage Include="$(MSBuildThisFileDirectory)MinimalApiMapper.SourceGenerator.targets" PackagePath="build/" />
+        </ItemGroup>
+    </Target>
 
+    <!-- Packaging -->
     <ItemGroup>
-        <!-- Reference the Abstractions project -->
-        <ProjectReference Include="..\MinimalApiMapper.Abstractions\MinimalApiMapper.Abstractions.csproj" PrivateAssets="all" />
+        <None Include="$(OutputPath)\$(AssemblyName).dll"
+              Pack="true" 
+              PackagePath="analyzers/dotnet/cs" 
+              Visible="false" />
     </ItemGroup>
+
+<!--    <ItemGroup>
+        <None Include="$(OutputPath)\netstandard2.0\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>-->
 
 
 </Project>

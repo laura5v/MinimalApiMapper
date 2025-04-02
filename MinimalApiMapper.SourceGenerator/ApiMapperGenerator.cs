@@ -1,13 +1,13 @@
 ﻿// MinimalApiMapper.SourceGenerator/ApiMapperGenerator.cs
 
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MinimalApiMapper.Abstractions; // Make sure this using is present
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace MinimalApiMapper.SourceGenerator;
 
@@ -24,23 +24,33 @@ public class ApiMapperGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // --- Step 1: Find all classes potentially marked with [MapGroup] ---
-        var classDeclarations = context
+        IncrementalValuesProvider<ClassDeclarationSyntax> classDeclarations = context
             .SyntaxProvider.CreateSyntaxProvider(
-                predicate: static (s, _) => IsSyntaxTargetForGeneration(s), // Quick filter: is it a class?
+                predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
                 transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx)
-            ) // Deeper filter: does it have the attribute?
-            .Where(static m => m is not null)!; // Filter out classes that don't have the attribute
+            )
+            .Where(static m => m is not null)!;
 
         // --- Step 2: Combine class information with compilation ---
-        var compilationAndClasses = context.CompilationProvider.Combine(
-            classDeclarations.Collect()
-        );
+        IncrementalValueProvider<(
+            Compilation,
+            ImmutableArray<ClassDeclarationSyntax>
+        )> compilationAndClasses = context.CompilationProvider.Combine(classDeclarations.Collect());
 
-        // --- Step 3: Register the source generation function ---
+        // --- Step 3: Combine previous result with AnalyzerConfigOptions ---
+        IncrementalValueProvider<(
+            (Compilation, ImmutableArray<ClassDeclarationSyntax>),
+            AnalyzerConfigOptionsProvider
+        )> compilationClassesAndOptions = compilationAndClasses.Combine(
+            context.AnalyzerConfigOptionsProvider
+        ); // <-- Combine here
+
+        // --- Step 4: Register the source generation function ---
         context.RegisterSourceOutput(
-            compilationAndClasses,
-            static (spc, source) => Execute(source.Item1, source.Item2, spc)
-        );
+            compilationClassesAndOptions, // <-- Use the combined provider
+            static (spc, source) =>
+                Execute(source.Item1.Item1, source.Item1.Item2, source.Item2, spc)
+        ); // <-- Deconstruct tuple
     }
 
     // --- Helper Methods for Initialization ---
@@ -82,7 +92,144 @@ public class ApiMapperGenerator : IIncrementalGenerator
 
     // --- Main Execution Logic ---
 
+    [SuppressMessage(
+        "MicrosoftCodeAnalysisCorrectness",
+        "RS1035:Do not use APIs banned for analyzers"
+    )]
     private static void Execute(
+        Compilation compilation,
+        ImmutableArray<ClassDeclarationSyntax> classes,
+        AnalyzerConfigOptionsProvider optionsProvider,
+        SourceProductionContext context
+    )
+    {
+        if (classes.IsDefaultOrEmpty)
+            return;
+
+        var distinctClasses = classes
+            .Select(c => compilation.GetSemanticModel(c.SyntaxTree).GetDeclaredSymbol(c))
+            .Where(s => s is not null)
+            .Distinct(SymbolEqualityComparer.Default)
+            .OfType<INamedTypeSymbol>()
+            .ToList();
+
+        if (!distinctClasses.Any())
+            return;
+
+        // --- Get Output Path from Options Provider ---
+        optionsProvider.GlobalOptions.TryGetValue( // <-- Use optionsProvider parameter
+            "build_property.MinimalApiMapper_GeneratedOutputFullPath",
+            out var generatedOutputFullPath
+        );
+
+        // --- Get Output Path from Options ---
+        /*context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(
+            "build_property.MinimalApiMapper_GeneratedOutputFullPath", // Matches CompilerVisibleProperty name
+            out var generatedOutputFullPath
+        );*/
+
+        var writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
+
+        // --- Generate the code ---
+        var (serviceExtensionCode, mappingExtensionCode) = GenerateExtensionMethods(
+            compilation,
+            distinctClasses,
+            context
+        );
+
+        var writeSucceeded = false;
+
+        // --- Write to Disk (if path provided) ---
+        if (writeToDisk)
+        {
+            try
+            {
+                if (!Directory.Exists(generatedOutputFullPath))
+                {
+                    Directory.CreateDirectory(generatedOutputFullPath!);
+                }
+
+                // Write service extensions if generated
+                if (!string.IsNullOrEmpty(serviceExtensionCode))
+                {
+                    File.WriteAllText(
+                        Path.Combine(
+                            generatedOutputFullPath!,
+                            "MinimalApiMapper.ServiceExtensions.g.cs"
+                        ),
+                        serviceExtensionCode
+                    );
+                }
+                else // Ensure file doesn't exist if code wasn't generated this run
+                {
+                    File.Delete(
+                        Path.Combine(
+                            generatedOutputFullPath!,
+                            "MinimalApiMapper.ServiceExtensions.g.cs"
+                        )
+                    );
+                }
+
+                // Write mapping extensions if generated
+                if (!string.IsNullOrEmpty(mappingExtensionCode))
+                {
+                    File.WriteAllText(
+                        Path.Combine(
+                            generatedOutputFullPath!,
+                            "MinimalApiMapper.MappingExtensions.g.cs"
+                        ),
+                        mappingExtensionCode
+                    );
+                }
+                else // Ensure file doesn't exist if code wasn't generated this run
+                {
+                    File.Delete(
+                        Path.Combine(
+                            generatedOutputFullPath!,
+                            "MinimalApiMapper.MappingExtensions.g.cs"
+                        )
+                    );
+                }
+
+                writeSucceeded = true; // Mark as succeeded
+            }
+            catch (Exception ex)
+            {
+                writeSucceeded = false; // Mark as failed
+                // Report diagnostic
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            id: "MAM001",
+                            title: "Failed to write generated file to disk",
+                            messageFormat: "Failed to write generated file to '{0}'. Error: {1}",
+                            category: "MinimalApiMapperGenerator",
+                            DiagnosticSeverity.Warning, // Warning as AddSource still works
+                            isEnabledByDefault: true
+                        ),
+                        Location.None, // No specific code location
+                        messageArgs: [generatedOutputFullPath, ex.Message]
+                    )
+                );
+            }
+        }
+
+        // --- Add Source to Compilation ONLY if NOT writing to disk successfully ---
+        // If we wrote to disk, the .targets file handles adding it via <Compile Include="...">
+        if (!writeSucceeded)
+        {
+            if (!string.IsNullOrEmpty(serviceExtensionCode))
+            {
+                context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode!);
+            }
+            if (!string.IsNullOrEmpty(mappingExtensionCode))
+            {
+                context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode!);
+            }
+        }
+    }
+
+    /*private static void Execute(
         Compilation compilation,
         ImmutableArray<ClassDeclarationSyntax?> classes,
         SourceProductionContext context
@@ -97,7 +244,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
         // Filter out potentially duplicate class declarations (e.g., partial classes)
         // We only need one declaration per class symbol
         var distinctClasses = classes
-            .Select(c => compilation.GetSemanticModel(c.SyntaxTree).GetDeclaredSymbol(c))
+            .Where(c => c is not null)
+            .Select(c => compilation.GetSemanticModel(c!.SyntaxTree).GetDeclaredSymbol(c))
             .Where(s => s is not null)
             .Distinct(SymbolEqualityComparer.Default)
             .OfType<INamedTypeSymbol>() // Ensure we have symbols
@@ -107,9 +255,6 @@ public class ApiMapperGenerator : IIncrementalGenerator
         {
             return;
         }
-        
-        // --- Collect Types for JSON Serialization ---
-        var serializableTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
 
         // --- Generate the code ---
         var (serviceExtensionCode, mappingExtensionCode) = GenerateExtensionMethods(
@@ -120,15 +265,15 @@ public class ApiMapperGenerator : IIncrementalGenerator
 
         if (!string.IsNullOrEmpty(serviceExtensionCode))
         {
-            context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode);
+            context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode!);
         }
         if (!string.IsNullOrEmpty(mappingExtensionCode))
         {
-            context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode);
+            context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode!);
         }
-    }
+    }*/
 
-    // --- Code Generation Implementation (Placeholder) ---
+    // --- Code Generation Implementation ---
 
     private static (
         string? ServiceExtensionCode,
@@ -139,8 +284,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         SourceProductionContext context
     )
     {
-        // TODO: Implement the actual code generation logic here
-        // This will involve:
+        // Actual code generation logic here
         // 1. Iterating through groupClasses.
         // 2. For each class, find methods marked with MapMethodAttribute or MapMethodsAttribute.
         // 3. Extract route info, parameters, etc. using the compilation and semantic models.
@@ -152,20 +296,23 @@ public class ApiMapperGenerator : IIncrementalGenerator
         var requiredUsings = new HashSet<string>(); // Track usings needed for mapping
 
         // Start building the service registration extension method (File-scoped namespace)
-        serviceBuilder.AppendLine("// <auto-generated/>");
+        serviceBuilder.AppendLine("// <auto-generated/>"); // Header
+        serviceBuilder.AppendLine("#nullable enable"); // Enable nullable reference types
         serviceBuilder.AppendLine("using Microsoft.Extensions.DependencyInjection;");
         serviceBuilder.AppendLine();
         serviceBuilder.AppendLine("namespace MinimalApiMapper.Generated;"); // File-scoped
         serviceBuilder.AppendLine();
         serviceBuilder.AppendLine("public static class MinimalApiMapperServiceExtensions");
         serviceBuilder.AppendLine("{");
+        // Add generated code attribute
+        serviceBuilder.AppendLine($"    {CodeBuilder.GetGeneratedCodeAttribute()}");
         serviceBuilder.AppendLine(
             "    public static IServiceCollection AddApiGroups(this IServiceCollection services)"
         );
         serviceBuilder.AppendLine("    {");
 
         // Start building the mapping extension method (File-scoped namespace)
-        mappingBuilder.AppendLine("// <auto-generated/>");
+        // mappingBuilder.AppendLine("// <auto-generated/>");
         // Add base usings - more will be added later dynamically
         requiredUsings.Add("Microsoft.AspNetCore.Builder");
         requiredUsings.Add("Microsoft.AspNetCore.Http");
@@ -185,7 +332,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             serviceBuilder.AppendLine($"        services.AddScoped<{fullClassName}>();");
 
             // Find the MapGroup attribute to get the prefix
-            string groupPrefix = GetGroupPrefix(groupClassSymbol);
+            var groupPrefix = GetGroupPrefix(groupClassSymbol);
 
             // --- Loop through methods in the current group class ---
             foreach (var member in groupClassSymbol.GetMembers())
@@ -204,7 +351,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
                     foreach (var attrData in methodAttributes)
                     {
                         // Generate the mapping code snippet for this specific method and attribute
-                        string? mappingSnippet = GenerateMappingForMethod(
+                        var mappingSnippet = GenerateMappingForMethod(
                             compilation,
                             groupClassSymbol,
                             methodSymbol,
@@ -231,8 +378,16 @@ public class ApiMapperGenerator : IIncrementalGenerator
 
         // Assemble the final mapping code with usings
         var finalMappingCode = new StringBuilder();
+        finalMappingCode.AppendLine("// <auto-generated/>"); // Header
+        finalMappingCode.AppendLine("#nullable enable"); // Enable nullable reference types
         foreach (var ns in requiredUsings.OrderBy(u => u))
         {
+            // Skip those with global
+            if (ns.StartsWith("global::"))
+            {
+                continue;
+            }
+
             finalMappingCode.AppendLine($"using {ns};");
         }
         finalMappingCode.AppendLine();
@@ -240,6 +395,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
         finalMappingCode.AppendLine();
         finalMappingCode.AppendLine("public static class MinimalApiMapperMappingExtensions");
         finalMappingCode.AppendLine("{");
+        // Add generated code attribute
+        finalMappingCode.AppendLine($"    {CodeBuilder.GetGeneratedCodeAttribute()}");
         finalMappingCode.AppendLine(
             "    public static IEndpointRouteBuilder MapApiGroups(this IEndpointRouteBuilder app)"
         );
@@ -296,8 +453,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
     {
         // --- 1. Extract Mapping Attribute Info ---
         string? routeTemplate;
-        List<string> httpMethods = new List<string>();
-        string mappingAttributeFullName = mappingAttributeData.AttributeClass!.ToDisplayString();
+        var httpMethods = new List<string>();
+        var mappingAttributeFullName = mappingAttributeData.AttributeClass!.ToDisplayString();
 
         if (mappingAttributeFullName == MapMethodsAttributeName)
         {
@@ -319,8 +476,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
                 return null; // Invalid attribute usage
             routeTemplate = mappingAttributeData.ConstructorArguments[0].Value?.ToString();
             // Infer HTTP method from attribute name
-            string attributeShortName = mappingAttributeData.AttributeClass!.Name; // e.g., "MapGetAttribute"
-            string httpMethod = attributeShortName
+            var attributeShortName = mappingAttributeData.AttributeClass!.Name; // e.g., "MapGetAttribute"
+            var httpMethod = attributeShortName
                 .Substring(3)
                 .Replace("Attribute", "")
                 .ToUpperInvariant(); // e.g., "GET"
@@ -331,14 +488,14 @@ public class ApiMapperGenerator : IIncrementalGenerator
             return null; // No valid HTTP methods found
 
         // --- 2. Combine Route ---
-        string finalRoute = CombineRoute(groupPrefix, routeTemplate);
+        var finalRoute = CombineRoute(groupPrefix, routeTemplate);
 
         // --- 3. Generate Attributes for the Lambda ---
         var lambdaAttributesBuilder = new StringBuilder();
         foreach (var attributeData in methodSymbol.GetAttributes())
         {
             // Skip our mapping attributes
-            string attrFullName = attributeData.AttributeClass!.ToDisplayString();
+            var attrFullName = attributeData.AttributeClass!.ToDisplayString();
             if (
                 attrFullName == MapMethodsAttributeName
                 || attributeData.AttributeClass.BaseType?.ToDisplayString()
@@ -348,21 +505,21 @@ public class ApiMapperGenerator : IIncrementalGenerator
                 continue;
             }
 
-            string? attributeString = GenerateAttributeString(attributeData, requiredUsings);
+            var attributeString = GenerateAttributeString(attributeData, requiredUsings);
             if (attributeString != null)
             {
                 lambdaAttributesBuilder.Append(attributeString).Append(" "); // Add space after attribute
             }
         }
-        string lambdaAttributes = lambdaAttributesBuilder.ToString();
+        var lambdaAttributes = lambdaAttributesBuilder.ToString();
 
         // --- 4. Analyze Parameters & Build Lambda Signature ---
         var lambdaParameters = new List<string>(); // e.g., "HttpContext context", "int id", "[FromBody] User user"
         var methodArguments = new List<string>(); // Arguments to pass to the actual method call
 
         // Instance methods still need HttpContext to resolve the group instance
-        bool needsContextForInstance = !methodSymbol.IsStatic;
-        bool contextParameterExists = methodSymbol.Parameters.Any(p =>
+        var needsContextForInstance = !methodSymbol.IsStatic;
+        var contextParameterExists = methodSymbol.Parameters.Any(p =>
             p.Type.ToDisplayString() == "Microsoft.AspNetCore.Http.HttpContext"
         );
 
@@ -374,8 +531,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
 
         foreach (var param in methodSymbol.Parameters)
         {
-            string paramType = param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            string paramName = param.Name;
+            var paramType = param.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var paramName = param.Name;
             requiredUsings.Add(
                 param.Type.ContainingNamespace.ToDisplayString(
                     SymbolDisplayFormat.FullyQualifiedFormat
@@ -385,7 +542,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             var paramAttributesBuilder = new StringBuilder();
             foreach (var paramAttr in param.GetAttributes())
             {
-                string? attributeString = GenerateAttributeString(paramAttr, requiredUsings);
+                var attributeString = GenerateAttributeString(paramAttr, requiredUsings);
                 if (attributeString != null)
                 {
                     paramAttributesBuilder.Append(attributeString).Append(" ");
@@ -397,37 +554,38 @@ public class ApiMapperGenerator : IIncrementalGenerator
             methodArguments.Add(paramName); // Add param name for the call later
         }
 
-        string lambdaSignature = string.Join(", ", lambdaParameters);
+        var lambdaSignature = string.Join(", ", lambdaParameters);
 
         // --- 4. Build Lambda Body ---
         var bodyBuilder = new StringBuilder();
         // string groupInstanceVar = $"{groupClassSymbol.Name.ToLowerInvariant()}Instance";
-        string groupInstanceVar = $"{groupClassSymbol.Name.ToLowerInvariant()}_{Guid.NewGuid():N}"; // More unique name
-        string fullGroupClassName = groupClassSymbol.ToDisplayString(
+        // var groupInstanceVar = $"{groupClassSymbol.Name.ToLowerInvariant()}_{Guid.NewGuid():N}"; // More unique name
+        const string groupInstanceVar = "__group";
+        var fullGroupClassName = groupClassSymbol.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat
         );
 
         if (!methodSymbol.IsStatic)
         {
-            string contextAccess = contextParameterExists
+            var contextAccess = contextParameterExists
                 ? methodSymbol
                     .Parameters.First(p =>
                         p.Type.ToDisplayString() == "Microsoft.AspNetCore.Http.HttpContext"
                     )
                     .Name
                 : "context";
-            bodyBuilder.AppendLine($"            var sp = {contextAccess}.RequestServices;");
+            bodyBuilder.AppendLine($"            var __sp = {contextAccess}.RequestServices;");
             bodyBuilder.AppendLine(
-                $"            var {groupInstanceVar} = sp.GetRequiredService<{fullGroupClassName}>();"
+                $"            var {groupInstanceVar} = __sp.GetRequiredService<{fullGroupClassName}>();"
             );
         }
 
-        string methodCallArgs = string.Join(", ", methodArguments);
-        string methodCallTarget = methodSymbol.IsStatic ? fullGroupClassName : groupInstanceVar;
-        string methodCall = $"{methodCallTarget}.{methodSymbol.Name}({methodCallArgs})";
+        var methodCallArgs = string.Join(", ", methodArguments);
+        var methodCallTarget = methodSymbol.IsStatic ? fullGroupClassName : groupInstanceVar;
+        var methodCall = $"{methodCallTarget}.{methodSymbol.Name}({methodCallArgs})";
 
         // Handle async methods
-        bool isAsync =
+        var isAsync =
             methodSymbol.ReturnType is INamedTypeSymbol returnType
             && (
                 returnType.GetFullName() == "System.Threading.Tasks.Task"
@@ -441,18 +599,26 @@ public class ApiMapperGenerator : IIncrementalGenerator
                     )
                 )
             );
-        
+
         // Add return type namespace
-        if(methodSymbol.ReturnType is INamedTypeSymbol namedReturn && !methodSymbol.ReturnsVoid)
+        if (methodSymbol.ReturnType is INamedTypeSymbol namedReturn && !methodSymbol.ReturnsVoid)
         {
-            requiredUsings.Add(namedReturn.ContainingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
-            if(namedReturn.IsGenericType)
+            requiredUsings.Add(
+                namedReturn.ContainingNamespace.ToDisplayString(
+                    SymbolDisplayFormat.FullyQualifiedFormat
+                )
+            );
+            if (namedReturn.IsGenericType)
             {
-                foreach(var typeArg in namedReturn.TypeArguments)
+                foreach (var typeArg in namedReturn.TypeArguments)
                 {
-                    if(typeArg is INamedTypeSymbol namedTypeArg)
+                    if (typeArg is INamedTypeSymbol namedTypeArg)
                     {
-                        requiredUsings.Add(namedTypeArg.ContainingNamespace.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                        requiredUsings.Add(
+                            namedTypeArg.ContainingNamespace.ToDisplayString(
+                                SymbolDisplayFormat.FullyQualifiedFormat
+                            )
+                        );
                     }
                 }
             }
@@ -474,20 +640,23 @@ public class ApiMapperGenerator : IIncrementalGenerator
         }
 
         // --- 6. Generate app.MapX Call ---
-        string mapMethodName = DetermineMapMethod(httpMethods);
-        string httpMethodsArg = mapMethodName == "MapMethods"
-            ? $", new [] {{ {string.Join(", ", httpMethods.Select(m => $"\"{m}\""))} }}"
-            : "";
+        var mapMethodName = DetermineMapMethod(httpMethods);
+        var httpMethodsArg =
+            mapMethodName == "MapMethods"
+                ? $", new [] {{ {string.Join(", ", httpMethods.Select(m => $"\"{m}\""))} }}"
+                : "";
 
-        string lambdaModifier = isAsync ? "async " : "";
-        
+        var lambdaModifier = isAsync ? "async " : "";
+
         var snippet = new StringBuilder();
         // Append method attributes before the lambda signature
-        snippet.Append($"        app.{mapMethodName}(\"{finalRoute}\", {lambdaAttributes}{lambdaModifier}({lambdaSignature}) =>");
+        snippet.Append(
+            $"        app.{mapMethodName}(\"{finalRoute}\", {lambdaAttributes}{lambdaModifier}({lambdaSignature}) =>"
+        );
         snippet.AppendLine(); // Start lambda body on new line
-        snippet.AppendLine( "        {");
+        snippet.AppendLine("        {");
         snippet.AppendLine(bodyBuilder.ToString());
-        snippet.Append( "        })");
+        snippet.Append("        })");
         // TODO: Add fluent API calls here later if needed (.WithName(), .WithTags(), etc.)
         snippet.Append(";");
 
@@ -504,7 +673,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             return null;
 
         var attributeType = attributeData.AttributeClass;
-        string fullAttributeTypeName = attributeType.ToDisplayString(
+        var fullAttributeTypeName = attributeType.ToDisplayString(
             SymbolDisplayFormat.FullyQualifiedFormat
         );
         requiredUsings.Add(
@@ -527,7 +696,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             arguments.Add($"{arg.Key} = {FormatTypedConstant(arg.Value, requiredUsings)}");
         }
 
-        string argsString = arguments.Any() ? $"({string.Join(", ", arguments)})" : "";
+        var argsString = arguments.Any() ? $"({string.Join(", ", arguments)})" : "";
         return $"[{fullAttributeTypeName}{argsString}]";
     }
 
@@ -592,7 +761,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
                 var arrayValues = constant.Values.Select(v =>
                     FormatTypedConstant(v, requiredUsings)
                 );
-                string arrayTypeName = constant.Type is IArrayTypeSymbol ats
+                var arrayTypeName = constant.Type is IArrayTypeSymbol ats
                     ? ats.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                     : "object"; // Fallback type
                 requiredUsings.Add(
@@ -619,7 +788,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         {
             return prefix;
         }
-        return $"{prefix}/{template.TrimStart('/')}";
+        return $"{prefix}/{template!.TrimStart('/')}";
     }
 
     private static string DetermineMapMethod(List<string> httpMethods)
