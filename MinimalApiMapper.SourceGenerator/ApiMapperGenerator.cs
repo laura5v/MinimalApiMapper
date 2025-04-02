@@ -229,50 +229,6 @@ public class ApiMapperGenerator : IIncrementalGenerator
         }
     }
 
-    /*private static void Execute(
-        Compilation compilation,
-        ImmutableArray<ClassDeclarationSyntax?> classes,
-        SourceProductionContext context
-    )
-    {
-        if (classes.IsDefaultOrEmpty)
-        {
-            // No classes marked with [MapGroup], nothing to do.
-            return;
-        }
-
-        // Filter out potentially duplicate class declarations (e.g., partial classes)
-        // We only need one declaration per class symbol
-        var distinctClasses = classes
-            .Where(c => c is not null)
-            .Select(c => compilation.GetSemanticModel(c!.SyntaxTree).GetDeclaredSymbol(c))
-            .Where(s => s is not null)
-            .Distinct(SymbolEqualityComparer.Default)
-            .OfType<INamedTypeSymbol>() // Ensure we have symbols
-            .ToList();
-
-        if (!distinctClasses.Any())
-        {
-            return;
-        }
-
-        // --- Generate the code ---
-        var (serviceExtensionCode, mappingExtensionCode) = GenerateExtensionMethods(
-            compilation,
-            distinctClasses,
-            context
-        );
-
-        if (!string.IsNullOrEmpty(serviceExtensionCode))
-        {
-            context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode!);
-        }
-        if (!string.IsNullOrEmpty(mappingExtensionCode))
-        {
-            context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode!);
-        }
-    }*/
-
     // --- Code Generation Implementation ---
 
     private static (
