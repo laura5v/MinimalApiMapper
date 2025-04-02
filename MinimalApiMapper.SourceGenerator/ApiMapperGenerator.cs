@@ -8,6 +8,8 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using MinimalApiMapper.SourceGenerator.Extensions;
+using MinimalApiMapper.SourceGenerator.Helpers;
 
 namespace MinimalApiMapper.SourceGenerator;
 
@@ -117,27 +119,32 @@ public class ApiMapperGenerator : IIncrementalGenerator
             return;
 
         // --- Get Output Path from Options Provider ---
-        optionsProvider.GlobalOptions.TryGetValue( // <-- Use optionsProvider parameter
+        optionsProvider.GlobalOptions.TryGetValue(
             "build_property.MinimalApiMapper_GeneratedOutputFullPath",
             out var generatedOutputFullPath
         );
 
-        // --- Get Output Path from Options ---
-        /*context.AnalyzerConfigOptions.GlobalOptions.TryGetValue(
-            "build_property.MinimalApiMapper_GeneratedOutputFullPath", // Matches CompilerVisibleProperty name
-            out var generatedOutputFullPath
-        );*/
+        bool writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
+        bool writeSucceeded = false;
 
-        var writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
+        // --- Collect Types for JSON Serialization ---
+        var serializableTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        CollectSerializableTypes(distinctClasses, serializableTypes); // <-- Collect types first
 
-        // --- Generate the code ---
-        var (serviceExtensionCode, mappingExtensionCode) = GenerateExtensionMethods(
+        // --- Generate the Code Strings ---
+        var (serviceExtensionCode, mappingExtensionCode) = GenerateMappingExtensions(
             compilation,
             distinctClasses,
             context
-        );
+        ); // Don't need to pass serializableTypes here anymore
 
-        var writeSucceeded = false;
+        string? jsonContextCode = null;
+        string? jsonConfigCode = null;
+        if (serializableTypes.Any())
+        {
+            jsonContextCode = GenerateJsonContext(serializableTypes, context);
+            jsonConfigCode = GenerateJsonConfigurationExtension(context); // Context name is fixed now
+        }
 
         // --- Write to Disk (if path provided) ---
         if (writeToDisk)
@@ -149,54 +156,36 @@ public class ApiMapperGenerator : IIncrementalGenerator
                     Directory.CreateDirectory(generatedOutputFullPath!);
                 }
 
-                // Write service extensions if generated
-                if (!string.IsNullOrEmpty(serviceExtensionCode))
-                {
-                    File.WriteAllText(
-                        Path.Combine(
-                            generatedOutputFullPath!,
-                            "MinimalApiMapper.ServiceExtensions.g.cs"
-                        ),
-                        serviceExtensionCode
-                    );
-                }
-                else // Ensure file doesn't exist if code wasn't generated this run
-                {
-                    File.Delete(
-                        Path.Combine(
-                            generatedOutputFullPath!,
-                            "MinimalApiMapper.ServiceExtensions.g.cs"
-                        )
-                    );
-                }
+                // Write service extensions
+                WriteOrDeleteFile(
+                    generatedOutputFullPath!,
+                    "MinimalApiMapper.ServiceExtensions.g.cs",
+                    serviceExtensionCode
+                );
+                // Write mapping extensions
+                WriteOrDeleteFile(
+                    generatedOutputFullPath!,
+                    "MinimalApiMapper.MappingExtensions.g.cs",
+                    mappingExtensionCode
+                );
+                // Write JSON context (if generated)
+                WriteOrDeleteFile(
+                    generatedOutputFullPath!,
+                    "MinimalApiMapper.JsonContext.g.cs",
+                    jsonContextCode
+                );
+                // Write JSON config extension (if generated)
+                WriteOrDeleteFile(
+                    generatedOutputFullPath!,
+                    "MinimalApiMapper.JsonExtensions.g.cs",
+                    jsonConfigCode
+                );
 
-                // Write mapping extensions if generated
-                if (!string.IsNullOrEmpty(mappingExtensionCode))
-                {
-                    File.WriteAllText(
-                        Path.Combine(
-                            generatedOutputFullPath!,
-                            "MinimalApiMapper.MappingExtensions.g.cs"
-                        ),
-                        mappingExtensionCode
-                    );
-                }
-                else // Ensure file doesn't exist if code wasn't generated this run
-                {
-                    File.Delete(
-                        Path.Combine(
-                            generatedOutputFullPath!,
-                            "MinimalApiMapper.MappingExtensions.g.cs"
-                        )
-                    );
-                }
-
-                writeSucceeded = true; // Mark as succeeded
+                writeSucceeded = true;
             }
             catch (Exception ex)
             {
-                writeSucceeded = false; // Mark as failed
-                // Report diagnostic
+                writeSucceeded = false;
                 context.ReportDiagnostic(
                     Diagnostic.Create(
                         new DiagnosticDescriptor(
@@ -215,16 +204,255 @@ public class ApiMapperGenerator : IIncrementalGenerator
         }
 
         // --- Add Source to Compilation ONLY if NOT writing to disk successfully ---
-        // If we wrote to disk, the .targets file handles adding it via <Compile Include="...">
         if (!writeSucceeded)
         {
             if (!string.IsNullOrEmpty(serviceExtensionCode))
-            {
-                context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode!);
-            }
+                context.AddSource("MinimalApiMapper.ServiceExtensions.g.cs", serviceExtensionCode);
             if (!string.IsNullOrEmpty(mappingExtensionCode))
+                context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode);
+            if (!string.IsNullOrEmpty(jsonContextCode))
+                context.AddSource("MinimalApiMapper.JsonContext.g.cs", jsonContextCode);
+            if (!string.IsNullOrEmpty(jsonConfigCode))
+                context.AddSource("MinimalApiMapper.JsonExtensions.g.cs", jsonConfigCode);
+        }
+    }
+
+    // --- Helper to Write or Delete File ---
+    [SuppressMessage(
+        "MicrosoftCodeAnalysisCorrectness",
+        "RS1035:Do not use APIs banned for analyzers"
+    )]
+    private static void WriteOrDeleteFile(string directory, string fileName, string? content)
+    {
+        var filePath = Path.Combine(directory, fileName);
+        if (!string.IsNullOrEmpty(content))
+        {
+            File.WriteAllText(filePath, content);
+        }
+        else if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+        }
+    }
+
+    private static (
+        string? ServiceExtensionCode,
+        string? MappingExtensionCode
+    ) GenerateMappingExtensions(
+        Compilation compilation,
+        List<INamedTypeSymbol> groupClasses,
+        SourceProductionContext context
+    )
+    {
+        // ... (Existing logic for generating service and mapping extensions) ...
+        // ... (No changes needed inside this method itself) ...
+        var serviceBuilder = new StringBuilder();
+        var mappingBuilder = new StringBuilder();
+        var requiredUsings = new HashSet<string>
+        { /* Base Usings */
+            "Microsoft.AspNetCore.Builder",
+            "Microsoft.AspNetCore.Http",
+            "Microsoft.AspNetCore.Routing",
+            "Microsoft.Extensions.DependencyInjection",
+            "System",
+        };
+
+        // Build service registration method header
+        serviceBuilder.AppendLine("// <auto-generated/>\n#nullable enable");
+        serviceBuilder.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        serviceBuilder.AppendLine("\nnamespace MinimalApiMapper.Generated;\n");
+        serviceBuilder.AppendLine("public static class MinimalApiMapperServiceExtensions");
+        serviceBuilder.AppendLine(
+            "{\n    public static IServiceCollection AddApiGroups(this IServiceCollection services)\n    {"
+        );
+
+        // Loop through classes and methods to generate mappings...
+        foreach (var groupClassSymbol in groupClasses)
+        {
+            string fullClassName = groupClassSymbol.ToDisplayString(
+                SymbolDisplayFormat.FullyQualifiedFormat
+            );
+            requiredUsings.Add(
+                groupClassSymbol.ContainingNamespace.ToDisplayString(
+                    SymbolDisplayFormat.FullyQualifiedFormat
+                )
+            );
+            serviceBuilder.AppendLine($"        services.AddScoped<{fullClassName}>();");
+
+            string groupPrefix = GetGroupPrefix(groupClassSymbol);
+
+            foreach (var member in groupClassSymbol.GetMembers())
             {
-                context.AddSource("MinimalApiMapper.MappingExtensions.g.cs", mappingExtensionCode!);
+                if (
+                    member is IMethodSymbol methodSymbol
+                    && !methodSymbol.IsStatic
+                    // && !methodSymbol.IsConstructor
+                    && methodSymbol.DeclaredAccessibility == Accessibility.Public
+                )
+                {
+                    var methodAttributes = GetMappingAttributes(methodSymbol);
+                    if (!methodAttributes.Any())
+                        continue;
+
+                    foreach (var attrData in methodAttributes)
+                    {
+                        var mappingSnippet = GenerateMappingForMethod(
+                            compilation,
+                            groupClassSymbol,
+                            methodSymbol,
+                            attrData,
+                            groupPrefix,
+                            requiredUsings,
+                            context
+                        );
+                        if (mappingSnippet != null)
+                        {
+                            mappingBuilder.AppendLine(mappingSnippet);
+                            mappingBuilder.AppendLine();
+                        }
+                    }
+                }
+            }
+        }
+
+        serviceBuilder.AppendLine("        return services;\n    }\n}"); // Finish service method
+
+        // Assemble final mapping code
+        if (mappingBuilder.Length == 0)
+            return (serviceBuilder.ToString(), null);
+
+        var finalMappingCode = new StringBuilder();
+        finalMappingCode.AppendLine("// <auto-generated/>\n#nullable enable");
+        foreach (var ns in requiredUsings.OrderBy(u => u))
+        {
+            // Skip those with global
+            if (ns.StartsWith("global::"))
+            {
+                continue;
+            }
+
+            finalMappingCode.AppendLine($"using {ns};");
+        }
+
+        finalMappingCode.AppendLine("\nnamespace MinimalApiMapper.Generated;\n");
+        finalMappingCode.AppendLine("public static class MinimalApiMapperMappingExtensions");
+        finalMappingCode.AppendLine(
+            "{\n    public static IEndpointRouteBuilder MapApiGroups(this IEndpointRouteBuilder app)\n    {"
+        );
+        finalMappingCode.Append(mappingBuilder.ToString());
+        finalMappingCode.AppendLine("        return app;\n    }\n}"); // Finish mapping method
+
+        return (serviceBuilder.ToString(), finalMappingCode.ToString());
+    }
+
+    // --- JSON Context Generation ---
+    private static string? GenerateJsonContext(
+        HashSet<ITypeSymbol> serializableTypes,
+        SourceProductionContext context
+    )
+    {
+        if (!serializableTypes.Any())
+            return null;
+
+        var sb = new StringBuilder();
+        var usings = new HashSet<string> { "System.Text.Json.Serialization" };
+
+        sb.AppendLine("// <auto-generated/>\n#nullable enable"); // Header
+
+        // Collect unique namespaces
+        foreach (var type in serializableTypes.SelectMany(t => t.GetNamespacesForType()).Distinct())
+        {
+            usings.Add(type);
+        }
+
+        foreach (var ns in usings.OrderBy(u => u))
+            sb.AppendLine($"using {ns};");
+        sb.AppendLine("\nnamespace MinimalApiMapper.Generated;\n");
+
+        // Generate [JsonSerializable] attributes
+        foreach (var type in serializableTypes.OrderBy(t => t.Name))
+        {
+            // Ensure it's a class or struct (STJ requirement)
+            if (
+                type.TypeKind == TypeKind.Class
+                || type.TypeKind == TypeKind.Struct
+                || type.TypeKind == TypeKind.Enum
+            )
+            {
+                sb.AppendLine(
+                    $"[JsonSerializable(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}))]"
+                );
+            }
+        }
+
+        // Define the context class
+        sb.AppendLine(
+            $"internal partial class MinimalApiMapperJsonContext : JsonSerializerContext"
+        );
+        sb.AppendLine("{ }"); // Empty body is sufficient
+
+        return sb.ToString();
+    }
+
+    // --- JSON Configuration Extension ---
+    // No longer needs serializableTypes parameter as context name is fixed
+    private static string? GenerateJsonConfigurationExtension(SourceProductionContext context)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated/>\n#nullable enable"); // Header
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine("using Microsoft.AspNetCore.Http.Json;");
+        sb.AppendLine("using System.Text.Json.Serialization;");
+        sb.AppendLine("\nnamespace MinimalApiMapper.Generated;\n");
+        sb.AppendLine("public static class MinimalApiMapperJsonExtensions");
+        sb.AppendLine("{");
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine(
+            "    /// Configures System.Text.Json serialization options to use the generated MinimalApiMapperJsonContext"
+        );
+        sb.AppendLine(
+            "    /// containing types discovered in MinimalApiMapper endpoints for Native AOT compatibility."
+        );
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine(
+            "    public static IServiceCollection AddApiGroupSerializers(this IServiceCollection services)"
+        );
+        sb.AppendLine("    {");
+        sb.AppendLine("        services.Configure<JsonOptions>(options =>");
+        sb.AppendLine("        {");
+        sb.AppendLine(
+            "            options.SerializerOptions.TypeInfoResolverChain.Add(MinimalApiMapperJsonContext.Default);"
+        );
+        sb.AppendLine("        });");
+        sb.AppendLine("        return services;");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+    
+    // --- Add Back Type Collection Logic ---
+    private static void CollectSerializableTypes(
+        List<INamedTypeSymbol> groupClasses,
+        HashSet<ITypeSymbol> serializableTypes
+    )
+    {
+        foreach (var groupClass in groupClasses)
+        {
+            foreach (var member in groupClass.GetMembers())
+            {
+                if (
+                    member is IMethodSymbol methodSymbol
+                    && !methodSymbol.IsStatic
+                    // && !methodSymbol.IsConstructor
+                    && methodSymbol.DeclaredAccessibility == Accessibility.Public
+                )
+                {
+                    // Only consider methods with mapping attributes
+                    if (!GetMappingAttributes(methodSymbol).Any())
+                        continue;
+                    
+                    SerializableTypes.CollectSerializableTypesFromMethod(methodSymbol, serializableTypes);
+                }
             }
         }
     }

@@ -5,9 +5,23 @@ using MinimalApiMapper.Abstractions;
 
 namespace MinimalApiMapper.SourceGenerator.Sample.Groups;
 
-[MapGroup("api")]
-public class ApiGroup(ILogger<ApiGroup> logger)
+[MapGroup("home")]
+public class HomeGroup(ILogger<HomeGroup> logger)
 {
+    [Authorize]
+    [MapGet("auth")]
+    public Ok<ModelResponse> GetAuth(ClaimsPrincipal user, string? data = null)
+    {
+        logger.LogInformation("GetAuth: {User}", user);
+        
+        return TypedResults.Ok(new ModelResponse
+        {
+            User = user.Claims.FirstOrDefault(c => c.Type == "sub")?.Value,
+            Message = $"Authenticated as: {user.Identity?.Name}",
+            Data = data,
+        });
+    }
+    
     [MapGet("hello")]
     public Ok<string> GetHello(string? name = null)
     {
@@ -16,15 +30,5 @@ public class ApiGroup(ILogger<ApiGroup> logger)
         return TypedResults.Ok($"Hello {name}!");
     }
     
-    [Authorize]
-    [MapGet("auth")]
-    public Ok<ModelResponse> GetAuth(ClaimsPrincipal user, string? data = null)
-    {
-        return TypedResults.Ok(new ModelResponse
-        {
-            User = user.Claims.FirstOrDefault(c => c.Type == "sub")?.Value,
-            Message = $"Authenticated as: {user.Identity?.Name}",
-            Data = data,
-        });
-    }
+
 }

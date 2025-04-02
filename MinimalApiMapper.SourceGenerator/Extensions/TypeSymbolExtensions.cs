@@ -32,4 +32,9 @@ internal static class TypeSymbolExtensions
     {
         return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
     }
+    
+    public static string GetFullName(this INamespaceSymbol symbol)
+    {
+        return symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    }
 }

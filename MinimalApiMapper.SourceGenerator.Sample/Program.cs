@@ -5,6 +5,8 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.Services.AddAuthentication().AddBearerToken();
 builder.Services.AddAuthorization();
 
+builder.Services.AddApiGroupSerializers();
+
 builder.Services.AddApiGroups();
 
 var app = builder.Build();
