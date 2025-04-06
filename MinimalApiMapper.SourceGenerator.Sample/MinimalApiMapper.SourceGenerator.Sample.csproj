@@ -21,9 +21,9 @@
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.3" />
         <PackageReference Include="OpenIddict.Validation.AspNetCore" Version="7.0.0-preview.1.25169.78" />
         <PackageReference Include="OpenIddict.Validation.SystemNetHttp" Version="7.0.0-preview.1.25169.78" />
-        <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="8.0.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="8.0.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.0.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="8.1.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="8.1.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.1.0" />
         <PackageReference Include="System.Text.Json" Version="9.0.3" />
     </ItemGroup>
 
