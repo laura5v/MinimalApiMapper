@@ -26,7 +26,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         "MinimalApiMapper.Abstractions.MapMethodsAttribute"; // Specific attribute for MapMethods(...)
 
     public bool WriteToSource { get; set; } = true;
-    
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // --- Step 1: Find all classes potentially marked with [MapGroup] ---
@@ -54,8 +54,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         // --- Step 4: Register the source generation function ---
         context.RegisterSourceOutput(
             compilationClassesAndOptions,
-            static (spc, source) =>
-                Execute(source.Item1.Item1, source.Item1.Item2, source.Item2, spc)
+            (spc, source) => Execute(source.Item1.Item1, source.Item1.Item2, source.Item2, spc)
         );
     }
 
@@ -102,7 +101,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         "MicrosoftCodeAnalysisCorrectness",
         "RS1035:Do not use APIs banned for analyzers"
     )]
-    private static void Execute(
+    private void Execute(
         Compilation compilation,
         ImmutableArray<ClassDeclarationSyntax> classes,
         AnalyzerConfigOptionsProvider optionsProvider,
@@ -128,7 +127,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             out var generatedOutputFullPath
         );
 
-        var writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
+        var writeToDisk = WriteToSource && !string.IsNullOrWhiteSpace(generatedOutputFullPath);
         var writeSucceeded = false;
 
         // --- Collect Types for JSON Serialization ---
@@ -433,7 +432,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         sb.AppendLine("}");
         return sb.ToString();
     }
-    
+
     // --- Add Back Type Collection Logic ---
     private static void CollectSerializableTypes(
         List<INamedTypeSymbol> groupClasses,
@@ -454,8 +453,11 @@ public class ApiMapperGenerator : IIncrementalGenerator
                     // Only consider methods with mapping attributes
                     if (!GetMappingAttributes(methodSymbol).Any())
                         continue;
-                    
-                    SerializableTypes.CollectSerializableTypesFromMethod(methodSymbol, serializableTypes);
+
+                    SerializableTypes.CollectSerializableTypesFromMethod(
+                        methodSymbol,
+                        serializableTypes
+                    );
                 }
             }
         }
