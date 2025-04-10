@@ -43,13 +43,13 @@ jobs:
         run: dotnet build -c Debug
 
       - name: Test (Debug)
-        run: dotnet test -c Debug --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=opencover -p:Include="[MinimalApiMapper]*"
-          
+        run: dotnet test -c Debug --no-build --collect "Code Coverage;Format=opencover"
+        
       - name: Build (Release)
         run: dotnet build -c Release
         
       - name: Test (Release)
-        run: dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=opencover -p:Include="[MinimalApiMapper]*"
+        run: dotnet test -c Release --no-build --collect "Code Coverage;Format=opencover"
         
       - name: Upload Codecov
         uses: codecov/codecov-action@v4.0.1
