@@ -77,7 +77,7 @@ jobs:
         uses: mindsers/changelog-reader-action@v2
         id: read_changelog
         with:
-          version: ${{ github.event.inputs.version }}
+          version: ${{ env.RELEASE_VERSION }}
           path: ./CHANGELOG.md
           
       # https://github.com/microsoft/azure-pipelines-tasks/issues/1511
