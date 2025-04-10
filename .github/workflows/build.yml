@@ -14,6 +14,7 @@ concurrency:
 jobs:
   build:
     permissions:
+      id-token: write # Allow action to get OIDC token from GitHub
       contents: read
       attestations: write
     runs-on: ubuntu-latest
@@ -43,17 +44,18 @@ jobs:
         run: dotnet build -c Debug
 
       - name: Test (Debug)
-        run: dotnet test -c Debug --no-build --collect "Code Coverage;Format=opencover"
+        run: dotnet test -c Debug --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=opencover -p:CoverletOutput='coverage.json'
         
       - name: Build (Release)
         run: dotnet build -c Release
         
       - name: Test (Release)
-        run: dotnet test -c Release --no-build --collect "Code Coverage;Format=opencover"
-        
+        run: dotnet test -c Release --no-build -p:CollectCoverage=true -p:CoverletOutputFormat=opencover -p:CoverletOutput='coverage.json' -p:MergeWith='coverage.json'
+      
       - name: Upload Codecov
-        uses: codecov/codecov-action@v4.0.1
+        uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.json
+          use_oidc: true
           fail_ci_if_error: false
         
