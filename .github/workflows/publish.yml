@@ -45,11 +45,6 @@ jobs:
         with:
           version: ${{ env.RELEASE_VERSION }}
         
-      - name: Set Package Name
-        run: |
-          echo "PKG_NAME=./CompiledExpressions/bin/Release/CompiledExpressions.${{ env.RELEASE_VERSION }}.nupkg" >> $GITHUB_ENV
-          echo "Using PKG_NAME = ${{ env.PKG_NAME }}"
-        
       - name: Checkout
         uses: actions/checkout@v4
         with:
