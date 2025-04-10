@@ -35,6 +35,10 @@ jobs:
           echo "REPO_NAME=${GITHUB_REPOSITORY##*/}"
           echo "BRANCH=${GITHUB_REF##*/}"
           
+      - name: Prebuild
+        run: | 
+          dotnet build -c Debug || :
+          
       - name: Build (Debug)
         run: dotnet build -c Debug
 
