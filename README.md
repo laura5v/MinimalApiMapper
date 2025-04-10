@@ -4,8 +4,8 @@
 ![License](https://img.shields.io/github/license/ionite34/MinimalApiMapper)
 
 
-![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.SourceGenerator?style=flat&logo=nuget&label=MinimalApiMapper.SourceGenerator&color=104b7e)
-![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.Abstractions?style=flat&logo=nuget&label=MinimalApiMapper.Abstractions&color=104b7e)
+![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.SourceGenerator?style=flat&logo=nuget&label=MinimalApiMapper.SourceGenerator&color=104b7e&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FMinimalApiMapper.SourceGenerator)
+![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.Abstractions?style=flat&logo=nuget&label=MinimalApiMapper.Abstractions&color=104b7e&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FMinimalApiMapper.Abstractions)
 
 
 **Tired of choosing between the clean organization of MVC Controllers and the blazing-fast, Native AOT power of Minimal APIs? Now you don't have to!**
