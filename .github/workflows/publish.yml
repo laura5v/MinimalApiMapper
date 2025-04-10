@@ -66,23 +66,22 @@ jobs:
         
       - name: Pre Build
         run: |
-          dotnet build -c Release --no-restore || :
+          dotnet build -c Release --no-restore > /dev/null 2>&1 || :
         
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build -c Release --no-restore -p:Version=${{ env.RELEASE_VERSION }}
 
       - name: Test
         run: dotnet test -c Release --no-build
         
       - name: Pack
         run: | 
-          dotnet pack -c Release --no-build --no-restore --output nupkg \
-          --include-symbols --include-source --version-suffix ${{ github.event.inputs.version }} 
+          dotnet pack -c Release --no-build --no-restore --output nupkg --include-symbols --include-source --version-suffix ${{ env.RELEASE_VERSION }}
           
+      # https://github.com/microsoft/azure-pipelines-tasks/issues/1511
       - name: Push Packages to NuGet
         run: |
-          echo "Pushing nugets in nupkg/*.nupkg"
-          dotnet nuget push "nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+          dotnet nuget push "nupkg/*.nupkg;-:nupkg/*.symbols.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
 
       - name: Read Changelog Entry
         uses: mindsers/changelog-reader-action@v2
