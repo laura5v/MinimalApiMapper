@@ -73,17 +73,17 @@ jobs:
         run: | 
           dotnet pack -c Release --no-build --no-restore --output nupkg --include-symbols --include-source --version-suffix ${{ env.RELEASE_VERSION }}
           
-      # https://github.com/microsoft/azure-pipelines-tasks/issues/1511
-      - name: Push Packages to NuGet
-        run: |
-          dotnet nuget push "nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
-
       - name: Read Changelog Entry
         uses: mindsers/changelog-reader-action@v2
         id: read_changelog
         with:
           version: v${{ github.event.inputs.version }}
           path: ./CHANGELOG.md
+          
+      # https://github.com/microsoft/azure-pipelines-tasks/issues/1511
+      - name: Push Packages to NuGet
+        run: |
+          dotnet nuget push "nupkg/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
 
       - name: Create Git tag
         run: |
