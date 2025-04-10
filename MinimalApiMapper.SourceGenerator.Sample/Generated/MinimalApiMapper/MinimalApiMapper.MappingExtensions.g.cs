@@ -4,35 +4,33 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using MinimalApiMapper.SourceGenerator.Sample.Groups;
 using System;
 
 namespace MinimalApiMapper.Generated;
 
 public static class MinimalApiMapperMappingExtensions
 {
-    [System.CodeDom.Compiler.GeneratedCode("MinimalApiMapper.SourceGenerator", "1.0.0-dev.6")]
     public static IEndpointRouteBuilder MapApiGroups(this IEndpointRouteBuilder app)
     {
-        app.MapGet("api/hello", (HttpContext context, string name) =>
-        {
-            var __sp = context.RequestServices;
-            var __group = __sp.GetRequiredService<global::MinimalApiMapper.SourceGenerator.Sample.Groups.ApiGroup>();
-            return __group.GetHello(name);
-        });
-
-        app.MapGet("api/auth", [global::Microsoft.AspNetCore.Authorization.AuthorizeAttribute] (HttpContext context, global::System.Security.Claims.ClaimsPrincipal user, string data) =>
-        {
-            var __sp = context.RequestServices;
-            var __group = __sp.GetRequiredService<global::MinimalApiMapper.SourceGenerator.Sample.Groups.ApiGroup>();
-            return __group.GetAuth(user, data);
-        });
-
         app.MapGet("weather/forecast", (HttpContext context, string latitude, string longitude) =>
         {
             var __sp = context.RequestServices;
             var __group = __sp.GetRequiredService<global::MinimalApiMapper.SourceGenerator.Sample.Groups.WeatherGroup>();
             return __group.GetForecast(latitude, longitude);
+        });
+
+        app.MapGet("home/auth", [global::Microsoft.AspNetCore.Authorization.AuthorizeAttribute] (HttpContext context, global::System.Security.Claims.ClaimsPrincipal user, string data) =>
+        {
+            var __sp = context.RequestServices;
+            var __group = __sp.GetRequiredService<global::MinimalApiMapper.SourceGenerator.Sample.Groups.HomeGroup>();
+            return __group.GetAuth(user, data);
+        });
+
+        app.MapGet("home/hello", (HttpContext context, string name) =>
+        {
+            var __sp = context.RequestServices;
+            var __group = __sp.GetRequiredService<global::MinimalApiMapper.SourceGenerator.Sample.Groups.HomeGroup>();
+            return __group.GetHello(name);
         });
 
         return app;

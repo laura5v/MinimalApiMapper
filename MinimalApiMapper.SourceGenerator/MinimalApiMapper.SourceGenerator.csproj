@@ -21,23 +21,13 @@
         <Description>MinimalApiMapper.SourceGenerator</Description>
         <PackageTags>Minimal Api AOT SourceGenerator ASP.NET</PackageTags>
     </PropertyGroup>
-
-<!--    <PropertyGroup>
-        &lt;!&ndash; Persist the source generator (and other) files to disk &ndash;&gt;
-        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-        &lt;!&ndash; The "base" path for the source generators &ndash;&gt;
-        <GeneratedFolder>Generated</GeneratedFolder>
-        &lt;!&ndash; Write the output for each target framework to a different sub-folder &ndash;&gt;
-        <CompilerGeneratedFilesOutputPath>$(GeneratedFolder)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
-    </PropertyGroup>-->
     
     <ItemGroup>
-        <!-- Reference the Abstractions project -->
         <ProjectReference Include="..\MinimalApiMapper.Abstractions\MinimalApiMapper.Abstractions.csproj" />
     </ItemGroup>
     
     <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4">
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>

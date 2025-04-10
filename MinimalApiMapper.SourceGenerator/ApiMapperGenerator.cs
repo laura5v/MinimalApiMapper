@@ -13,7 +13,7 @@ using MinimalApiMapper.SourceGenerator.Helpers;
 
 namespace MinimalApiMapper.SourceGenerator;
 
-[Generator(LanguageNames.CSharp)]
+//[Generator(LanguageNames.CSharp)]
 public class ApiMapperGenerator : IIncrementalGenerator
 {
     // Define the fully qualified names of our attributes
@@ -23,6 +23,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
     private const string MapMethodsAttributeName =
         "MinimalApiMapper.Abstractions.MapMethodsAttribute"; // Specific attribute for MapMethods(...)
 
+    public bool WriteToSource { get; set; } = true;
+    
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // --- Step 1: Find all classes potentially marked with [MapGroup] ---
@@ -45,14 +47,14 @@ public class ApiMapperGenerator : IIncrementalGenerator
             AnalyzerConfigOptionsProvider
         )> compilationClassesAndOptions = compilationAndClasses.Combine(
             context.AnalyzerConfigOptionsProvider
-        ); // <-- Combine here
+        );
 
         // --- Step 4: Register the source generation function ---
         context.RegisterSourceOutput(
-            compilationClassesAndOptions, // <-- Use the combined provider
+            compilationClassesAndOptions,
             static (spc, source) =>
                 Execute(source.Item1.Item1, source.Item1.Item2, source.Item2, spc)
-        ); // <-- Deconstruct tuple
+        );
     }
 
     // --- Helper Methods for Initialization ---
@@ -124,8 +126,8 @@ public class ApiMapperGenerator : IIncrementalGenerator
             out var generatedOutputFullPath
         );
 
-        bool writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
-        bool writeSucceeded = false;
+        var writeToDisk = !string.IsNullOrWhiteSpace(generatedOutputFullPath);
+        var writeSucceeded = false;
 
         // --- Collect Types for JSON Serialization ---
         var serializableTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
@@ -269,7 +271,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
         // Loop through classes and methods to generate mappings...
         foreach (var groupClassSymbol in groupClasses)
         {
-            string fullClassName = groupClassSymbol.ToDisplayString(
+            var fullClassName = groupClassSymbol.ToDisplayString(
                 SymbolDisplayFormat.FullyQualifiedFormat
             );
             requiredUsings.Add(
@@ -279,7 +281,7 @@ public class ApiMapperGenerator : IIncrementalGenerator
             );
             serviceBuilder.AppendLine($"        services.AddScoped<{fullClassName}>();");
 
-            string groupPrefix = GetGroupPrefix(groupClassSymbol);
+            var groupPrefix = GetGroupPrefix(groupClassSymbol);
 
             foreach (var member in groupClassSymbol.GetMembers())
             {
