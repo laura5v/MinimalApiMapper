@@ -76,7 +76,7 @@ jobs:
         
       - name: Pack
         run: | 
-          dotnet pack -c Release --no-build --no-restore --output ${{ env.OUTPUT_DIR }} \
+          dotnet pack -c Release --no-build --no-restore --output nupkg \
           --include-symbols --include-source --version-suffix ${{ github.event.inputs.version }} 
           
       - name: Push Packages to NuGet
