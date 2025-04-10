@@ -13,7 +13,9 @@ using MinimalApiMapper.SourceGenerator.Helpers;
 
 namespace MinimalApiMapper.SourceGenerator;
 
-//[Generator(LanguageNames.CSharp)]
+#pragma warning disable RS1038
+[Generator(LanguageNames.CSharp)]
+#pragma warning restore RS1038
 public class ApiMapperGenerator : IIncrementalGenerator
 {
     // Define the fully qualified names of our attributes
