@@ -1,0 +1,34 @@
+<Project>
+
+  <PropertyGroup>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <Version>1.0.0-dev.8</Version>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <PackageVersion>$(Version)</PackageVersion>
+    <NuGetVersion>$(Version)</NuGetVersion>
+  </PropertyGroup>
+
+  <!-- NuGet Package Shared -->
+  <PropertyGroup>
+    <Authors>ionite34</Authors>
+    <Copyright>ionite34</Copyright>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/ionite34/MinimalApiMapper</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ionite34/MinimalApiMapper</PackageProjectUrl>
+    <PackageReleaseNotes>https://github.com/ionite34/MinimalApiMapper/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- Apparently this borks packing -->
+    <!--<GeneratePackageOnBuild>true</GeneratePackageOnBuild>-->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(SolutionDir)/README.md" Pack="true" PackagePath="/"/>
+  </ItemGroup>
+  
+</Project>
